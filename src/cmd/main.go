@@ -172,14 +172,17 @@ func InsertHandler(w http.ResponseWriter, r *http.Request){
 			currentJson := ImageStruct{}
 			currentJson.URL = currentURL[0]
 			for j := 0; j < len(tagArray); j++ {
-				currentJson.Tags = append(currentJson.Tags, TagStruct{tagArray[j]})
+				if tagArray[j] != "" {
+					currentJson.Tags = append(currentJson.Tags, TagStruct{tagArray[j]})
+				}
 			}
-			err = session.DB(dbName).C(cName).Insert(currentJson)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusFailedDependency)
-				return
+			if len(currentJson.Tags) >= 2 {
+				err = session.DB(dbName).C(cName).Insert(currentJson)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusFailedDependency)
+					return
+				}
 			}
-			fmt.Fprintln(w, currentJson)
 		}
 
 	default:
