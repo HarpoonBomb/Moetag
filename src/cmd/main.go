@@ -191,6 +191,57 @@ func InsertHandler(w http.ResponseWriter, r *http.Request){
 
 }
 
+func SearchHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		searchForm := `<form action="" method="post">
+		<input type="text" name="search"><br>
+		<input type="submit" value="Submit">
+	</form>`
+	fmt.Fprintln(w, searchForm)
+	case "POST":
+		session, err := mgo.Dial(dbURL)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer session.Close()
+
+		r.ParseForm()
+		formString := r.Form["search"]
+		searchTags := strings.Split(formString[0], " ")
+		var searchQuery []bson.M
+		for i := 0; i < len(searchTags); i++ {
+			searchQuery = append(searchQuery, bson.M{"tag": searchTags[i]})
+		}
+		var searchResults []interface{}
+		err = session.DB(dbName).C(cName).Find(bson.M{"tags" : bson.M{"$all" : searchQuery}}).All(&searchResults)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if len(searchResults) > 0 {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			output := `<style>
+	img {
+		width: 150px;
+	}
+	</style>`
+			for i := 0; i < len(searchResults); i++ {
+				output += `<img src="` + searchResults[i].(bson.M)["url"].(string) + `"><br>
+				<a href="` + searchResults[i].(bson.M)["url"].(string) + `">` +
+					searchResults[i].(bson.M)["url"].(string) + `</a><br>`
+			}
+			fmt.Fprintln(w, output)
+		} else {
+			fmt.Fprintln(w, "No matching images found.")
+		}
+	default:
+		http.Error(w, "Unexpected method", http.StatusBadRequest)
+	}
+}
+
 func main() {
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -205,6 +256,7 @@ func main() {
 	clientID = os.Getenv("CLIENT_ID")
 	clientSecret = os.Getenv("CLIENT_SECRET")
 
+	http.HandleFunc("/", SearchHandler)
 	http.HandleFunc("/addimages/", InsertHandler)
 	http.HandleFunc("/cleanup/", CleanupHandler)
 	http.ListenAndServe(":"+port, nil)
